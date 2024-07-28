@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Inventory List</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        details {
+            margin-bottom: 15px;
+        }
+        .collapsible {
+            cursor: pointer;
+            padding: 10px;
+            text-align: left;
+            background-color: #f2f2f2;
+            border: none;
+            outline: none;
+            font-size: 15px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+</head>
+<body>
+<h1>Привет Андрей!</h1>
+<p>Я не успел на тех собесе продемонстрировать навыки многопоточки вовремя решения алгоритмических задач.</p>
+<p>Хочу показать их текущим приложением.</p>
+<details>
+    <summary>Задача</summary>
+    <p>Есть список продуктов с их количеством.</p>
+    <p>Реализовать:</p>
+    <ol>
+        <li>покупку товаров</li>
+        <li>отправку уведомления о покупке</li>
+    </ol>
+    <p>Ограничения:</p>
+    <p>Сервис обработки уведомлений "хрупкий" и мы его не контролируем - отправлять уведомления можно 10 штук за раз и не чаще 1 в секунду</p>
+</details>
+
+<details>
+    <button onclick="resetSystem()">Инициализировать значениями по-умолчанию</button>
+    <summary>Список продуктов</summary>
+    <table>
+        <thead>
+        <tr>
+            <th>Product</th>
+            <th>Quantity</th>
+        </tr>
+        </thead>
+        <tbody id="inventoryTable">
+        <tr th:each="inventory : ${inventories}">
+            <td th:text="${inventory.product}"></td>
+            <td th:text="${inventory.quantity}"></td>
+        </tr>
+        </tbody>
+    </table>
+    <p>Кол-во отправленных уведомлений: <span id="notificationCount" th:text="${notificationCount}">0</span></p>
+    <i>10 потоков читают очередь и увеличивают счетчик отправленных уведомлений. 
+        Чтобы отправлять уведомления пачкой по 10, используем объект синхронизации CyclicBarrier(10)</i>
+
+</details>
+
+<details>
+    <summary>Сгенерировать заказы</summary>
+    <label for="orderCount">Кол-во заказов:</label>
+    <input type="number" id="orderCount" name="orderCount" min="1">
+    <button onclick="generateOrders()">Сгенерировать</button>
+    <p>Генерируем заказ на случайный продукт из списка и случайное количество продукта от 1 до 10</p>
+    <p>Заказы обрабатываются 10 потоками:</p>
+    <ol>
+        <li>У заказа меняется статус на "Куплен"</li>
+        <li>Кол-во продукта уменьшается (неблокирующий CAS-алгоритм)</li>
+        <li>Заказ отправляется в очередь (LinkedBlockingQueue) на отправку уведомления</li>
+    </ol>
+
+    <button onclick="openOrdersPage()">смотреть заказы</button>
+</details>
+
+<script>
+        const tableBody = document.getElementById('inventoryTable');
+        const notificationCountElement = document.getElementById('notificationCount');
+        const socket = new SockJS('/ws');
+        const stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, function (frame) {
+            stompClient.subscribe('/topic/inventories', function (message) {
+                const updatedInventory = JSON.parse(message.body);
+                const rows = tableBody.getElementsByTagName('tr');
+                for (let row of rows) {
+                    if (row.cells[0].innerText === updatedInventory.product) {
+                        row.cells[1].innerText = updatedInventory.quantity;
+                        return;
+                    }
+                }
+                const newRow = tableBody.insertRow();
+                const productCell = newRow.insertCell(0);
+                const quantityCell = newRow.insertCell(1);
+                productCell.innerText = updatedInventory.product;
+                quantityCell.innerText = updatedInventory.quantity;
+            });
+            stompClient.subscribe('/topic/notifications', function (message) {
+                notificationCountElement.innerText = message.body;
+            });
+        });
+
+        function generateOrders() {
+            const count = document.getElementById('orderCount').value;
+            fetch(`/spam?count=${count}`)
+                .then(response => response.text())
+                .then(data => console.log(data));
+        }
+
+        function resetSystem() {
+            fetch('/reset')
+                .then(response => response.text())
+                .then(data => {
+                    console.log(data);
+                    notificationCountElement.innerText = '0';
+                });
+        }
+
+        function openOrdersPage() {
+            window.open('/orders', '_blank');
+        }
+    </script>
+</body>
+</html>

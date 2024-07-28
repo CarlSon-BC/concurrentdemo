@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Order List</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script>
+        var stompClient = null;
+
+        function connect() {
+            var socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+            stompClient.connect({}, function (frame) {
+                console.log('Connected: ' + frame);
+                stompClient.subscribe('/topic/orders', function (order) {
+                    showOrder(JSON.parse(order.body));
+                });
+            });
+        }
+
+        function showOrder(order) {
+            var table = document.getElementById("orders");
+            var row = table.insertRow(-1);
+            var cell1 = row.insertCell(0);
+            var cell2 = row.insertCell(1);
+            var cell3 = row.insertCell(2);
+            var cell4 = row.insertCell(3);
+            cell1.innerHTML = order.userEmail;
+            cell2.innerHTML = order.product;
+            cell3.innerHTML = order.quantity;
+            cell4.innerHTML = order.status;
+        }
+
+        window.onload = function() {
+            connect();
+        };
+    </script>
+</head>
+<body>
+<h1>Order List</h1>
+<table id="orders">
+    <thead>
+    <tr>
+        <th>ID</th>
+        <th>User Email</th>
+        <th>Product</th>
+        <th>Quantity</th>
+        <th>Status</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="order : ${orders}">
+        <td th:text="${order.id}"></td>
+        <td th:text="${order.userEmail}"></td>
+        <td th:text="${order.product}"></td>
+        <td th:text="${order.quantity}"></td>
+        <td th:text="${order.status}"></td>
+    </tr>
+    </tbody>
+</table>
+</body>
+</html>
